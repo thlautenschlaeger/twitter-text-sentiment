@@ -1,3 +1,4 @@
-# twitter-text-segmentation
-Bot that learns text segmentation by training set and evualuates on live tweets.
+# twitter-text-sentiment
+Bot that learns text sentiment analysis to positive and negative tweets with implied neutral ratings. 
+The bot gets trained with a training set and evaluates on live tweets.
 
