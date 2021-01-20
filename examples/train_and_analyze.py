@@ -17,7 +17,10 @@ if __name__ == '__main__':
     features = data.text
     labels = data.sentiment
 
-    # Equally weighting of negative and positive tweets
+    # Set keyword for sentiment analysis
+    keyword = 'tsla'
+
+    # Set number of negative and positive training data to 50/50
     n_positives = labels.value_counts().loc['positive']
     n_negatives = labels.value_counts().loc['negative']
     fraction = n_negatives / n_positives
@@ -27,7 +30,6 @@ if __name__ == '__main__':
     # Bring features to equal distribution
     features = features[selected_labels.index].sort_index()
     labels = selected_labels.sort_index()
-
 
     # Data cleaning
     processed_features_list = []
@@ -54,20 +56,23 @@ if __name__ == '__main__':
     print(classification_report(y_test, predictions))
     print(accuracy_score(y_test, predictions))
 
-    file = json.load(open('./../key.json', 'rb'))
+    # Authenticate with twitter api
+    file = json.load(open('../key.json', 'rb'))
     consumer_key = file['consumer_key']
     consumer_secret = file['consumer_secret']
-    bearer_token = file['bearer_token']
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-
     api = tweepy.API(auth)
+
+    # Initialize positive and negative counts
     p_count, n_count = 0, 0
 
-    for tweet in tweepy.Cursor(api.search, q='#tsla', rpp=100).items():
+    # Collect newest tweets
+    for tweet in tweepy.Cursor(api.search, q='#'+keyword, rpp=100).items():
         processed_feature = preprocess_string(tweet.text)
         processed_features_tmp = processed_features_list + [processed_feature]
         processed_features_tmp = vectorizer.fit_transform(processed_features_tmp).toarray()
         processed_tweet = processed_features_tmp[-1]
+        # Perform sentiment analysis
         sentiment = text_classifier.predict(processed_tweet.reshape(1, -1))[0]
         # print("TWEET: {}; SENTIMENT: {}".format(tweet.text, sentiment[0]))
         if sentiment == 'positive':
@@ -76,8 +81,9 @@ if __name__ == '__main__':
             n_count += 1
 
         totals = p_count + n_count
-        print("[Num positives: {} - weight: {:.2f}%]| [Num negatives: {} - weight: {:.2f}%] | Total: {}".format(p_count,
-                                                                                                                p_count / totals * 100,
-                                                                                                                n_count,
-                                                                                                                n_count / totals * 100,
-                                                                                                                totals))
+        print("[Num positives: {} - weight: {:.2f}%]| [Num negatives: {} - "
+              "weight: {:.2f}%] | Total: {}".format(p_count,
+                                                    p_count / totals * 100,
+                                                    n_count,
+                                                    n_count / totals * 100,
+                                                    totals))
