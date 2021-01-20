@@ -1,6 +1,5 @@
 import json
 import pandas as pd
-import re
 import tweepy
 
 from nltk.corpus import stopwords
@@ -9,10 +8,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
+import sys
+
+sys.path.append(".")
 from tweesenti.utils import preprocess_string
 
 if __name__ == '__main__':
-    data = pd.read_csv('../data/twt_sample.csv')
+    data = pd.read_csv('./data/twt_sample.csv')
 
     features = data.text
     labels = data.sentiment
@@ -57,7 +59,7 @@ if __name__ == '__main__':
     print(accuracy_score(y_test, predictions))
 
     # Authenticate with twitter api
-    file = json.load(open('../key.json', 'rb'))
+    file = json.load(open('./key.json', 'rb'))
     consumer_key = file['consumer_key']
     consumer_secret = file['consumer_secret']
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -67,7 +69,7 @@ if __name__ == '__main__':
     p_count, n_count = 0, 0
 
     # Collect newest tweets
-    for tweet in tweepy.Cursor(api.search, q='#'+keyword, rpp=100).items():
+    for tweet in tweepy.Cursor(api.search, q='#' + keyword, rpp=100).items():
         processed_feature = preprocess_string(tweet.text)
         processed_features_tmp = processed_features_list + [processed_feature]
         processed_features_tmp = vectorizer.fit_transform(processed_features_tmp).toarray()
