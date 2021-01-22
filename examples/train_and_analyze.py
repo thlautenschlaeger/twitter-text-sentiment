@@ -14,46 +14,76 @@ sys.path.append(".")
 from tweesenti.utils import preprocess_string
 
 if __name__ == '__main__':
-    project_root = os.path.abspath(os.path.join(__file__, "../.."))
-    data = pd.read_csv(project_root + '/data/twt_sample.csv')
-
-    features = data.text
-    labels = data.sentiment
-
     # Set keyword for sentiment analysis
-    keyword = 'tsla'
+    keyword = 'bitcoin'
+    project_root = os.path.abspath(os.path.join(__file__, "../.."))
+
+    sentiment_data = pd.read_csv(project_root + '/data/twt_sample.csv')
+    spam_data = pd.read_csv(project_root + '/data/twt_spam.csv')
+
+    sentiment_features = sentiment_data.text
+    sentiment_labels = sentiment_data.sentiment
+
+    spam_features = spam_data.Tweet
+    spam_labels = spam_data.Type
 
     # Set number of negative and positive training data to 50/50
-    n_positives = labels.value_counts().loc['positive']
-    n_negatives = labels.value_counts().loc['negative']
+    n_positives = sentiment_labels.value_counts().loc['positive']
+    n_negatives = sentiment_labels.value_counts().loc['negative']
     fraction = n_negatives / n_positives
 
     # Negatives come first --> ABC
-    selected_labels = labels.sort_values()[:int(n_positives * fraction) + n_negatives]
+    selected_labels = sentiment_labels.sort_values()[:int(n_positives * fraction) + n_negatives]
     # Bring features to equal distribution
-    features = features[selected_labels.index].sort_index()
-    labels = selected_labels.sort_index()
+    sentiment_features = sentiment_features[selected_labels.index].sort_index()
+    sentiment_labels = selected_labels.sort_index()
 
     # Data cleaning
-    processed_features_list = []
-
-    for sentence in features:
-        processed_feature = preprocess_string(sentence)
-        processed_features_list.append(processed_feature)
+    processed_sentiment_features_list = []
+    for sentence in sentiment_features:
+        processed_sentiment_feature = preprocess_string(sentence)
+        processed_sentiment_features_list.append(processed_sentiment_feature)
 
     # Use bag of words to transform text to numbers with TD-IDF (Term frequency and Inverse Document frequency)
-    vectorizer = TfidfVectorizer(max_features=1800, min_df=3, max_df=0.8, stop_words=stopwords.words('english'))
-    processed_features = vectorizer.fit_transform(processed_features_list).toarray()
+    sentiment_vectorizer = TfidfVectorizer(max_features=1800, min_df=3, max_df=0.8,
+                                           stop_words=stopwords.words('english'))
+    processed_sentiment_features = sentiment_vectorizer.fit_transform(processed_sentiment_features_list).toarray()
 
     # Train & test split
-    X_train, X_test, y_train, y_test = train_test_split(processed_features, labels, test_size=0.1, random_state=0)
+    X_train, X_test, y_train, y_test = train_test_split(processed_sentiment_features, sentiment_labels, test_size=0.1,
+                                                        random_state=0)
 
     # Set up the classifier
-    text_classifier = RandomForestClassifier(n_estimators=200, random_state=0)
-    text_classifier.fit(X_train, y_train)
+    sentiment_classifier = RandomForestClassifier(n_estimators=200, random_state=0)
+    sentiment_classifier.fit(X_train, y_train)
 
     # Use the classifier for predictions
-    predictions = text_classifier.predict(X_test)
+    predictions = sentiment_classifier.predict(X_test)
+
+    print(confusion_matrix(y_test, predictions))
+    print(classification_report(y_test, predictions))
+    print(accuracy_score(y_test, predictions))
+
+    # Train spam detection
+    processed_spam_features_list = []
+    for sentence in spam_features:
+        processed_spam_feature = preprocess_string(sentence)
+        processed_spam_features_list.append(processed_spam_feature)
+
+    # Use bag of words to transform text to numbers with TD-IDF (Term frequency and Inverse Document frequency)
+    spam_vectorizer = TfidfVectorizer(max_features=1800, min_df=3, max_df=0.8, stop_words=stopwords.words('english'))
+    processed_spam_features = spam_vectorizer.fit_transform(processed_spam_features_list).toarray()
+
+    # Train & test split
+    X_train, X_test, y_train, y_test = train_test_split(processed_spam_features, spam_labels, test_size=0.1,
+                                                        random_state=0)
+
+    # Set up the classifier
+    spam_classifier = RandomForestClassifier(n_estimators=200, random_state=0)
+    spam_classifier.fit(X_train, y_train)
+
+    # Use the classifier for predictions
+    predictions = spam_classifier.predict(X_test)
 
     print(confusion_matrix(y_test, predictions))
     print(classification_report(y_test, predictions))
@@ -72,21 +102,29 @@ if __name__ == '__main__':
     # Collect newest tweets
     for tweet in tweepy.Cursor(api.search, q='#' + keyword, rpp=100).items():
         processed_feature = preprocess_string(tweet.text)
-        processed_features_tmp = processed_features_list + [processed_feature]
-        processed_features_tmp = vectorizer.fit_transform(processed_features_tmp).toarray()
-        processed_tweet = processed_features_tmp[-1]
-        # Perform sentiment analysis
-        sentiment = text_classifier.predict(processed_tweet.reshape(1, -1))[0]
-        # print("TWEET: {}; SENTIMENT: {}".format(tweet.text, sentiment[0]))
-        if sentiment == 'positive':
-            p_count += 1
-        else:
-            n_count += 1
 
-        totals = p_count + n_count
-        print("[Num positives: {} - weight: {:.2f}%]| [Num negatives: {} - "
-              "weight: {:.2f}%] | Total: {}".format(p_count,
-                                                    p_count / totals * 100,
-                                                    n_count,
-                                                    n_count / totals * 100,
-                                                    totals))
+        processed_features_tmp = processed_spam_features_list + [processed_feature]
+        processed_features_tmp = spam_vectorizer.fit_transform(processed_features_tmp).toarray()
+        processed_tweet = processed_features_tmp[-1]
+        # Perform spam detection
+        spam = spam_classifier.predict(processed_tweet.reshape(1, -1))[0]
+
+        if spam != 'Spam':
+            processed_features_tmp = processed_sentiment_features_list + [processed_feature]
+            processed_features_tmp = sentiment_vectorizer.fit_transform(processed_features_tmp).toarray()
+            processed_tweet = processed_features_tmp[-1]
+            # Perform sentiment analysis
+            sentiment = sentiment_classifier.predict(processed_tweet.reshape(1, -1))[0]
+            # print("TWEET: {}; SENTIMENT: {}".format(tweet.text, sentiment[0]))
+            if sentiment == 'positive':
+                p_count += 1
+            else:
+                n_count += 1
+
+            totals = p_count + n_count
+            print("[Num positives: {} - weight: {:.2f}%]| [Num negatives: {} - "
+                  "weight: {:.2f}%] | Total: {}".format(p_count,
+                                                        p_count / totals * 100,
+                                                        n_count,
+                                                        n_count / totals * 100,
+                                                        totals))
